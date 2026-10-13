@@ -1,376 +1,297 @@
---Question 29 - Create an AFTER INSERT Trigger
---Create an AFTER INSERT trigger that records every newly inserted patient in PatientAudit.
+--Question 1 — Commit a Patient Update
+--Start a transaction and update the ward of patient Id = 1 to ward 2.
+--Commit the transaction so that the change is permanently saved.
 
-CREATE TABLE PatientAudit02 
-(
-ID INT IDENTITY PRIMARY KEY ,
-PID INT ,
-ACTION VARCHAR(10),
-TIME DATETIME
-)
-GO
-CREATE OR ALTER TRIGGER INSERT_PATIENT
-ON PATIENTS
-AFTER INSERT
-AS
-BEGIN 
 
-INSERT INTO PatientAudit02
-SELECT ID ,'INSERTION',GETDATE()
-FROM inserted
+BEGIN TRAN 
 
-END;
+UPDATE Patients
+SET WardId = 2
+WHERE WARDID = 1
 
-INSERT INTO Patients
-VALUES
-    (401, 'Ali',  '20000101', 1),
-    (402, 'Omar', '20010101', 1),
-    (403, 'Ziad', '20020101', 1);
+COMMIT TRAN;
 SELECT *
-FROM PatientAudit02
-
---Question 30 - Audit Consultant Salary Changes
---Create an audit table and an AFTER UPDATE trigger that stores the old and new consultant salary.
-CREATE TABLE ConsultantSalaryAudit02
-(
-ID INT IDENTITY PRIMARY KEY ,
-CID INT ,
-OLD INT,
-NEW INT,
-ACTION VARCHAR(10),
-TIME DATETIME
-)
-GO
-CREATE OR ALTER TRIGGER UPDATE_CSALARY
-ON ConsultantS
-AFTER UPDATE
-AS 
-BEGIN
-IF NOT UPDATE(SALARY)
-   RETURN;
-INSERT INTO ConsultantSalaryAudit02
-SELECT I.Id ,D.Salary ,I.Salary ,'UPDATED',GETDATE()
-FROM inserted I INNER JOIN deleted D
-ON I.Id = d.ID
-END;
-
---Question 31 - Audit Patient Ward Changes
---Create a trigger that records the old and new ward whenever a patient's ward changes.
-GO
-CREATE OR ALTER TRIGGER UPDATE_PWARDID
-ON PATIENTS
-AFTER UPDATE
-AS 
-BEGIN
-IF NOT UPDATE(WARDID)
-   RETURN;
-INSERT INTO -- ASSUM TABLE TO INSERT IT
-SELECT I.ID ,D.WardId ,I.WardId ,'UPDATED',GETDATE()
-FROM inserted I INNER JOIN deleted D
-ON I.Id = d.ID
-END;
-
---Question 32 - Archive Deleted Patients
---Create a table for deleted patients and an AFTER DELETE trigger that stores deleted patient information.
-
-GO
-CREATE OR ALTER TRIGGER DELETE_PATIENT
-ON PATIENTS
-AFTER DELETE
-AS
-BEGIN 
-
-INSERT INTO --ASSUM THERE IS A DELETED TABLE
-SELECT ID ,'DELETE',GETDATE()
-FROM deleted
-END;
-
---Question 33 - Audit Deleted Consultants
---Create an AFTER DELETE trigger that stores deleted consultant information.
-GO
-CREATE OR ALTER TRIGGER DELETE_CONSULTANT
-ON PATIENTS
-AFTER DELETE
-AS
-BEGIN 
-
-INSERT INTO --ASSUM THERE IS A DELETED TABLE
-SELECT ID ,NAME,SALARY,'DELETE',GETDATE()
-FROM deleted
-END;
-
-
-
---Question 34 - Compare Old and New Consultant Salary
---Create an AFTER UPDATE trigger that displays the old and new salary of the consultant.
--- REBEATED 
---Question 35 - Compare Old and New Patient Ward
---Create an AFTER UPDATE trigger that displays the patient's old ward and new ward.
-
---DID BEFORE
-
---Question 36 - Handle Multiple Inserted Rows
---Create an AFTER INSERT trigger that records every patient inserted by a single statement. Then insert three patients in one statement.
-
--- SAME SINGLE INSERT TRIGGER
-
---Question 37 - Prevent Patients Without a Ward
---Create an INSTEAD OF INSERT trigger that prevents inserting a patient when Wardld is NULL.
-
-GO
-CREATE OR ALTER TRIGGER PREVENT_NULL
-ON PATIENTS
-INSTEAD OF INSERT
-AS
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM inserted
-        WHERE WardId IS NULL
-    )
-    BEGIN
-        THROW 50001, 'WardId cannot be NULL', 1;
-    END;
-
-    INSERT INTO Patients
-    SELECT *
-    FROM inserted;
-END;
-GO
-
---Question 38 - Validate Patient Date of Birth
---Create an INSTEAD OF INSERT trigger that prevents patients whose date of birth is in the future.
-
-CREATE OR ALTER TRIGGER PREVINT_FUTER_DATE
-ON PATIENTS
-INSTEAD OF INSERT 
-AS
-BEGIN 
-IF EXISTS (SELECT 1 FROM inserted WHERE DOB> GETDATE())
-   BEGIN
-   THROW 50002 ,'CAN NOT BE I THE FUTURE',1
-   END
-INSERT INTO Patients 
-SELECT *
-FROM inserted
-
-
-
-END;
-
---Question 39 - Prevent Consultant Salary Reduction
---Create an INSTEAD OF UPDATE trigger that prevents reducing a consultant's salary.
-
-
-GO
-CREATE OR ALTER TRIGGER PREVINT_REDUCE_SALARY
-ON CONSULTANTS
-INSTEAD OF UPDATE
-AS
-BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM inserted I
-        JOIN deleted D ON I.Id = D.Id
-        WHERE I.Salary < D.Salary
-    )
-    BEGIN
-        THROW 50003, 'SALARY CANNOT BE REDUCED', 1;
-    END;
-
-    UPDATE C
-    SET C.Name = I.Name,
-        C.Salary = I.Salary
-    FROM Consultants C
-    JOIN inserted I ON C.Id = I.Id;
-END;
-GO
-
-
---Question 40 - Control Patient Updates
---Create an INSTEAD OF UPDATE trigger that allows patient information to be updated without changing the patient ID.
-
-GO
-CREATE OR ALTER TRIGGER PREVINT_EDIT_ID
-ON PATIENTS
-INSTEAD OF UPDATE
-AS
-BEGIN
-
-
-    UPDATE P
-    SET P.Name = I.Name,
-        P.DOB = I.DOB,
-        P.WardId = I.WardId
-    FROM Patients P
-    JOIN inserted I ON P.Id = I.Id;
-END;
-
-
-UPDATE PATIENTS
-SET NAME ='MOHAMED'
-WHERE  ID =1
-
---Question 41 - Prevent Patient Deletion
---Create an INSTEAD OF DELETE trigger that prevents patients from being deleted directly.
-GO
-
-CREATE OR ALTER TRIGGER PREVENT_DELETE
-ON Patients
-INSTEAD OF DELETE
-AS
-BEGIN
-    THROW 50005, 'DELETE IS NOT ALLOWED', 1;
-END;
-GO
-
---Question 42 — Archive Before Delete
---Create an INSTEAD OF DELETE trigger that first stores the deleted patient in DeletedPatients, then deletes the patient from Patients.
-
-CREATE OR ALTER TRIGGER PREVENT_DELETE
-ON Patients
-INSTEAD OF DELETE
-AS
-BEGIN
-INSERT INTO -- ASSUM TABLE CREATED
-SELECT *
-FROM deleted
-
-    DELETE P
-    FROM Patients P
-    INNER JOIN deleted D
-        ON P.ID = D.ID;
-END;
-GO
-
---Question 43 — Add Patient with Audit Trigger
---Create a stored procedure that adds a patient and an AFTER INSERT trigger that records the new patient in PatientAudit. Then execute the procedure.
-CREATE OR ALTER PROC Add_Patient
-@ID INT ,
-@NAME VARCHAR(50),
-@DOB DATE ,
-@WARDID INT
-AS
-BEGIN
-INSERT INTO Patients
-VALUES (@ID,@NAME,@DOB,@WARDID)
-END;
-
-EXEC Add_Patient 409 ,'ADEL' ,'2000-10-05',2
---Question 44 — Update Consultant with Salary Audit
---Create a stored procedure to update a consultant salary and an AFTER UPDATE trigger to record the old and new salary. 
-GO
-CREATE OR ALTER PROC UPDATE_SALARY
-@ID INT ,
-@NEW INT
-AS
-BEGIN
-UPDATE Consultants
-SET SALARY = @NEW
-WHERE ID = @ID 
-END;
-
---Question 45 — Delete Patient and Archive the Record 
---Create a stored procedure that deletes a patient and a trigger that automatically archives the deleted patient.
-GO
-CREATE OR ALTER PROC DELETE_Patient
-@ID INT 
-AS
-BEGIN
-DELETE Patients
-WHERE ID=@ID
-END; 
-EXEC DELETE_Patient 1
-
-------------------------------- INDEX ------------------------------------------
-
---Question 1 — Create a Clustered Index
---Create PatientIndexDemo with PatientId, PatientName, DOB, and WardId. Copy data from Patients, then create a clustered index on PatientId.
-
-SELECT *
-INTO PatientIndexDemo
 FROM PATIENTS
-GO
-CREATE CLUSTERED INDEX IX_ID
-ON PatientIndexDemo(ID)
 
---Question 2 — Create Another Clustered Index
---Create ConsultantIndexDemo containing ConsultantId, ConsultantName, and Salary. Copy data from Consultants, then create a clustered index on ConsultantId.
+
+--Question 2 — Rollback a Consultant Salary Update
+--Start a transaction and increase the salary of consultant Id = 1 by 5000.
+--Then rollback the transaction so that the salary returns to its original value.
+
+BEGIN TRAN 
 SELECT *
-INTO ConsultantIndexDemo
-FROM CONSULTANTS
-GO
-CREATE CLUSTERED INDEX IX_CONSULTANT_ID
-ON ConsultantIndexDemo(ID)
+FROM Consultants
+WHERE ID =301
 
---Question 3 — Index Patients by Ward
---Create a nonclustered index on Patients.WardId to improve searches that retrieve patients based on their ward.
-GO
-CREATE NONCLUSTERED INDEX IX_PATIENT_WARDID
-ON PatientIndexDemo(WARDID)
+UPDATE Consultants
+SET Salary +=5000
+WHERE ID =301
 
-
---Question 4 — Index Consultants by Salary
---Create a nonclustered index on Consultants.Salary.
-CREATE NONCLUSTERED INDEX IX_CONSULTANT_SALARY
-ON ConsultantIndexDemo(SALARY)
-
-
---Question 5 — Create a Composite Nonclustered Index
---Create a nonclustered index on DrugAdministrations using PatientId and DrugCode.
-GO 
-CREATE NONCLUSTERED INDEX IX_ID_DRUGCODE
-ON DrugAdministrations(PatientId ,DRUGCODE)
---Question 6 — Create a Nonclustered Index with Included Columns
---Create a nonclustered index on Patients.WardId and include Name and DOB.
-GO
-CREATE NONCLUSTERED INDEX IX_PATIENT_WARDID_INCLUDED
-ON PatientIndexDemo (WARDID)
-INCLUDE (NAME, DOB);
---Question 7 — Unique Consultant Names
---Create a unique index on Consultants.Name to prevent duplicate consultant names.
-GO
-CREATE UNIQUE NONCLUSTERED INDEX IX_Consultants_Name
-ON ConsultantIndexDemo(NAME)
-
---Question 8 — Composite Unique Index
---Create PatientDrugAssignmentDemo with PatientId, DrugCode, and StartDate. Create a unique composite index on PatientId and DrugCode.
 SELECT *
-INTO PatientDrugAssignmentDemo
-FROM DrugAdministrations
+FROM Consultants
+WHERE ID =301
 
-CREATE UNIQUE NONCLUSTERED INDEX IX_DRUG
-ON PatientDrugAssignmentDemo(PATIENTID,DRUGCODE)
+ROLLBACK TRAN
 
---Question 9 — Test the Unique Index
---Insert one valid row into PatientDrugAssignmentDemo, then attempt to insert the same PatientId and DrugCode again with a different date.
-
--- THERE IS AN DUBLICATION ALEEDY , SO WE CAN NOT APPLY UNIQE INDEX
-
---Question 10 — Display Indexes
---Display the indexes defined on the Patients table.
-EXEC sp_helpindex 'Patients';
+SELECT *
+FROM Consultants
+WHERE ID =301
 
 
 
---Question 11 — Find Indexes from System Catalogs
---Display table name, index name, and index type for all indexes in the Hospital database.
+--Question 3 — Commit Multiple Related Updates
+--Start one transaction that:
+--Moves patient Id = 1 to ward 3.
+--Updates nurse Number = 1 so that the nurse serves ward 3.
+--Commit the transaction after both operations are completed successfully.
 
-SELECT I.object_id,OBJECT_NAME(I.object_id) , I.name  
-FROM sys.indexes AS I
 
---Question 12 — Drop a Nonclustered Index
---Remove the index created in Question 4.
-DROP INDEX IX_CONSULTANT_SALARY
-ON ConsultantIndexDemo
---Question 13 — Create an Index for Patient Searches
---Create a nonclustered index that can help queries searching patients by WardId and DOB.
+BEGIN TRANSACTION 
+UPDATE Patients
+SET WardId=3
+WHERE ID = 1
+
+UPDATE Nurses
+SET ServesInWardId = 3
+WHERE Number = 201
+
+IF(@@TRANCOUNT >0)
+   ROLLBACK TRAN
+ELSE
+COMMIT TRANSACTION
+--Question 4 — Use a Savepoint
+--Start a transaction that:
+--Updates patient Id = 1 and assigns the patient to ward 2.
+--Creates a savepoint named PatientUpdate.
+--Changes the patient's name to 'Temporary Patient Name'.
+--Rolls back only to the PatientUpdate savepoint.
+--Commits the transaction.
+--The ward change should remain, while the temporary name change should be cancelled.
+
+
+
+BEGIN TRAN 
+
+UPDATE Patients
+SET WardId = 2
+WHERE ID = 1
+
+SAVE TRAN PatientUpdate
+
+UPDATE Patients
+SET NAME = 'Temporary Patient Name'
+WHERE ID = 1
+ROLLBACK TRAN PatientUpdate
+COMMIT TRAN;
+SELECT *
+FROM PATIENTS
+
+
+
+--Question 5 — Transaction with TRY/CATCH
+--Create a transaction that increases the salary of consultant Id = 1 by 3000.
+--Use TRY...CATCH.
+--If the operation succeeds, commit the transaction.
+--If an error occurs, rollback the transaction and display:
+--Error number
+--Error message
+
+BEGIN TRY
+    BEGIN TRANSACTION;
+
+    UPDATE Consultants
+    SET SALARY += 3000 
+    WHERE Id = 201;
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+]
+    IF @@TRANCOUNT > 0
+        ROLLBACK TRANSACTION;
+
+    SELECT
+        ERROR_NUMBER() AS ErrorNumber,
+        ERROR_MESSAGE() AS ErrorMessage;
+END CATCH;
 GO
-CREATE  NONCLUSTERED INDEX IX_WARD_DOB
-ON PatientIndexDemo(WARDID,DOB)
 
---Question 14 — Create a Reporting Index
---Create a nonclustered index on DrugAdministrations using PatientId and DATE, including DrugCode, Dosage, and Quantity.
-CREATE NONCLUSTERED INDEX Reporting_Index
-ON DrugAdministrations(PatientId,DATE)
-INCLUDE (DRUGCODE,DOSAGE)
+
+-------------------------------------------------------- VIEWS ------------------------------------
+
+
+
+--Question 6 — Consultant Patient Statistics
+--Create vw_ConsultantPatientStatistics displaying Consultant ID, Consultant Name, Salary, and number of assigned patients. Use Consultants, PatientConsultantAssignments, COUNT(), and GROUP BY.
+
+ GO
+CREATE OR ALTER VIEW vw_ConsultantPatientStatistics 
+AS
+SELECT ID ,NAME ,Salary ,COUNT(PC.PatientId) AS PATIENTSNUM
+FROM Consultants C JOIN 
+PatientConsultantAssignments PC
+ON C.Id = PC.ConsultantId
+GROUP BY ID ,NAME ,SALARY
+GO
+
+SELECT *
+FROM vw_ConsultantPatientStatistics
+
+--Question 7 — Find Consultants with More Than 5 Patients
+--Using vw_ConsultantPatientStatistics, display consultants who have more than 5 assigned patients.
+
+
+SELECT *
+FROM vw_ConsultantPatientStatistics
+WHERE PATIENTSNUM > 5
+
+
+--Question 8 — Create an Indexed Aggregate View
+--Create dbo.vw_Ind exedConsultantPatientCount displaying Consultant ID and number of assigned patients.
+--Use COUNT_BIG(), GROUP BY, WITH SCHEMABINDING, and then create the required unique clustered index.
+GO
+CREATE OR ALTER VIEW dbo.VW_IndexedConsultant_PatientASsignedCount
+WITH SCHEMABINDING , ENCRYPTION
+AS
+SELECT
+    ConsultantId,
+    COUNT_BIG(*) AS PatientCount
+FROM dbo.PatientConsultantAssignments
+GROUP BY ConsultantId;
+GO
+
+CREATE UNIQUE CLUSTERED INDEX IX_VIEW
+ON VW_IndexedConsultant_PatientASsignedCount(ConsultantId)
+
+--Question 9 — Query the Indexed Aggregate View
+--Display consultants whose number of assigned patients is greater than 5.
+
+SELECT *
+FROM VW_IndexedConsultant_PatientASsignedCount
+WHERE PatientCount > 5
+
+--Question 10 — Display All Views
+--Display View Name, Creation Date, and Modification Date for all views in the Hospital database.
+
+
+SELECT
+    name AS ViewName,
+    create_date AS CreationDate,
+    modify_date AS ModificationDate
+FROM sys.views
+ORDER BY name;
+
+--Question 11 — Display a View Definition
+--Display the SQL definition of vw_PatientInformation.
+
+
+SELECT OBJECT_DEFINITION(
+    OBJECT_ID('DBO.vw_ConsultantPatientStatistics ')
+) AS ViewDefinition;
+--Question 12 — Alter a View
+--Modify vw_PatientInformation so that it returns only Patient ID, Patient Name, and Date of Birth.
+GO
+CREATE OR ALTER VIEW vw_PatientInformation
+WITH ENCRYPTION 
+AS
+SELECT ID ,NAME ,DOB
+FROM Patients
+
+--Question 13 — Drop a View
+--Remove vw_ConsultantSalary.
+DROP VIEW vw_ConsultantSalary.
+
+--Question 14 — Patient Hospital Report
+--Create vw_PatientHospitalReport displaying Patient ID, Patient Name, DOB, Ward Name, and Consultant Name.
+--Use Patients, Wards, PatientConsultantAssignments, and Consultants.
+--Use LEFT JOIN so patients remain visible even without a ward or consultant.
+GO
+CREATE OR ALTER VIEW PATIENTS_HOSPITAL_REBORT
+WITH ENCRYPTION 
+AS
+SELECT P.Id AS PATIENT_ID,P.Name AS PATIENT_NAME ,P.DOB 
+, W.Name AS WARD_NAME,
+C.Name AS CONSULTANT_NAME
+FROM PATIENTS P LEFT JOIN WARDS W
+ON P.WardId = W.Id
+LEFT JOIN PatientConsultantAssignments PC
+ON P.Id = PC.PatientId
+LEFT JOIN Consultants C
+ON C.Id = PC.ConsultantId 
+
+SELECT *
+FROM PATIENTS_HOSPITAL_REBORT
+
+--Question 15 — Search the Hospital Report
+--Using vw_PatientHospitalReport, display only patients whose consultant name is not NULL.
+
+SELECT *
+FROM PATIENTS_HOSPITAL_REBORT
+WHERE CONSULTANT_NAME IS NOT NULL
+
+--Question 16 — Display Patients by Ward
+--Using vw_PatientHospitalReport, display Patient Name, Ward Name,
+--and Consultant Name for patients belonging to a specific ward.
+
+SELECT PATIENT_NAME ,WARD_NAME ,CONSULTANT_NAME
+FROM PATIENTS_HOSPITAL_REBORT
+WHERE WARD_NAME = 'Intensive Care Unit (ICU)'
+
+
+
+--Question 17 — Most Patients per Consultant
+--Using vw_ConsultantPatientStatistics,
+--display the consultant with the highest number of assigned patients.
+
+SELECT *
+FROM vw_ConsultantPatientStatistics
+WHERE PATIENTSNUM = 
+(SELECT MAX(PATIENTSNUM)
+FROM vw_ConsultantPatientStatistics 
+)
+
+--Question 18 — View + Filtering
+--Using vw_PatientAgeInformation, display patients whose age is greater than 60.
+GO
+CREATE OR ALTER  VIEW vw_PatientAgeInformation
+WITH ENCRYPTION 
+AS 
+SELECT NAME ,DATEDIFF(YEAR, DOB, GETDATE()) AS Age
+FROM Patients;
+
+SELECT *
+FROM vw_PatientAgeInformation
+WHERE AGE>60
+
+
+--Question 19 — View + Sorting
+--Using vw_ConsultantPatientStatistics, 
+--display all consultants ordered from the consultant with the highest number of patients to the lowest.
+
+SELECT *
+FROM vw_ConsultantPatientStatistics
+ORDER BY PATIENTSNUM DESC
+
+--Question 20 — View + Aggregation
+--Using vw_PatientWardInformation, display the number of patients in each ward.
+
+
+SELECT WARD_NAME ,COUNT(PATIENT_ID) 'NUM OF PATIENTS'
+FROM PATIENTS_HOSPITAL_REBORT
+GROUP BY WARD_NAME 
+
+
+--Question 21 — Find Indexed Views
+--Display all views that have indexes. Show Schema Name, View Name, Index Name, and Index Type.
+SELECT
+    S.name AS SchemaName,
+    V.name AS ViewName,
+    I.name AS IndexName,
+    I.type_desc AS IndexType
+FROM sys.views V
+JOIN sys.schemas S
+    ON V.schema_id = S.schema_id
+JOIN sys.indexes I
+    ON V.object_id = I.object_id
+WHERE I.index_id > 0
+ORDER BY S.name, V.name;
